@@ -36,14 +36,17 @@ public final class ScreenTools {
 	 * A clickable thing on the screen: either a {@link AbstractWidget}, or a row of an
 	 * {@link AbstractSelectionList} together with the list that owns it. Rows are typed as
 	 * {@link GuiEventListener} so any list, whatever its entry type, is handled.
+	 * {@code parents} is the container chain from the screen down to the target's direct
+	 * parent, so a click can update focus the way a real click does.
 	 */
-	public record Target(AbstractWidget widget, AbstractSelectionList<?> list, GuiEventListener entry) {
-		static Target of(AbstractWidget w) {
-			return new Target(w, null, null);
+	public record Target(AbstractWidget widget, AbstractSelectionList<?> list, GuiEventListener entry,
+	                     List<ContainerEventHandler> parents) {
+		static Target of(AbstractWidget w, List<ContainerEventHandler> parents) {
+			return new Target(w, null, null, parents);
 		}
 
-		static Target row(AbstractSelectionList<?> list, GuiEventListener entry) {
-			return new Target(null, list, entry);
+		static Target row(AbstractSelectionList<?> list, GuiEventListener entry, List<ContainerEventHandler> parents) {
+			return new Target(null, list, entry, parents);
 		}
 
 		public boolean isRow() {
@@ -66,25 +69,28 @@ public final class ScreenTools {
 			return out;
 		}
 		Set<GuiEventListener> seen = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
-		collectInto(screen.children(), null, out, seen);
+		collectInto(screen.children(), null, List.of(screen), out, seen);
 		return out;
 	}
 
 	private static void collectInto(List<? extends GuiEventListener> elements, AbstractSelectionList<?> owner,
-	                                List<Target> out, Set<GuiEventListener> seen) {
+	                                List<ContainerEventHandler> parents, List<Target> out, Set<GuiEventListener> seen) {
 		for (GuiEventListener e : elements) {
 			if (e == null || !seen.add(e)) {
 				continue;
 			}
 			if (e instanceof AbstractWidget w && !(e instanceof AbstractSelectionList<?>)) {
-				out.add(Target.of(w));
+				out.add(Target.of(w, parents));
 			}
 			// Every direct child of an AbstractSelectionList is one of its rows.
 			if (owner != null && !(e instanceof ContainerEventHandler)) {
-				out.add(Target.row(owner, e));
+				out.add(Target.row(owner, e, parents));
 			}
 			if (e instanceof ContainerEventHandler parent) {
-				collectInto(parent.children(), e instanceof AbstractSelectionList<?> list ? list : null, out, seen);
+				List<ContainerEventHandler> chain = new ArrayList<>(parents);
+				chain.add(parent);
+				collectInto(parent.children(), e instanceof AbstractSelectionList<?> list ? list : null,
+						List.copyOf(chain), out, seen);
 			}
 		}
 	}
@@ -143,7 +149,29 @@ public final class ScreenTools {
 
 	/** Click a target; see {@link #click(AbstractWidget)} and {@link #clickRow}. */
 	public static boolean click(Screen screen, Target t) {
-		return t.isRow() ? clickRow(screen, t.list(), t.entry()) : click(t.widget());
+		if (t.isRow()) {
+			return clickRow(screen, t.list(), t.entry());
+		}
+		AbstractWidget w = t.widget();
+		boolean handled = click(w);
+		if (handled && w.shouldTakeFocusAfterInteraction()) {
+			focusPath(t.parents(), w);
+		}
+		return handled;
+	}
+
+	/**
+	 * Focus {@code child} in each container from its direct parent up to the screen, as
+	 * {@code ContainerEventHandler.mouseClicked} does on a real click. Some containers act
+	 * on this: e.g. {@code TabNavigationBar.setFocused} is what switches tabs, since a
+	 * {@code TabButton} has no click action of its own.
+	 */
+	private static void focusPath(List<ContainerEventHandler> parents, GuiEventListener child) {
+		for (int i = parents.size() - 1; i >= 0; i--) {
+			ContainerEventHandler parent = parents.get(i);
+			parent.setFocused(child);
+			child = parent;
+		}
 	}
 
 	/**
