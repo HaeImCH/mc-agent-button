@@ -4,6 +4,7 @@ import com.example.agentbutton.action.ScreenTools;
 import com.example.agentbutton.action.ServerActions;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ServerData;
@@ -51,10 +52,10 @@ public final class McpTools {
 				})));
 
 		tools.add(tool("press_key",
-				"Send a key press to the current screen — e.g. to set a key while a Key Binds row is armed, or to press Escape/Enter. Provide 'key' (a single letter/digit or a name like escape, enter, space, tab, up, down, left, right) or 'code' (a raw GLFW key code).",
+				"Send a key press to the current screen — e.g. to set a key while a Key Binds row is armed, or to press Escape/Enter. Provide 'key' (a single letter/digit or a name like escape, enter, space, tab, up, down, left, right) or 'code' (a raw InputConstants key code; 26.x uses SDL-style scancodes, not GLFW).",
 				schema(p -> {
 					p.add("key", stringProp("Single letter/digit (e.g. \"Q\") or key name (escape, enter, space, tab, up, down, left, right)"));
-					p.add("code", integerProp("Raw GLFW key code (alternative to 'key')"));
+					p.add("code", integerProp("Raw InputConstants key code (alternative to 'key')"));
 				})));
 
 		tools.add(tool("get_status",
@@ -230,44 +231,47 @@ public final class McpTools {
 			return "Provide either 'key' or 'code'.";
 		}
 
-		final int glfwCode = code;
+		final int keyCode = code;
+		final String keyShown = shown;
 		return ClientThread.get(() -> {
 			Screen screen = Minecraft.getInstance().gui.screen();
 			if (screen == null) {
 				return "Cannot press a key: no screen is open.";
 			}
-			boolean handled = ScreenTools.pressKey(screen, glfwCode, 0);
-			return "Pressed " + shownLabel(glfwCode) + " on " + screen.getClass().getSimpleName()
+			boolean handled = ScreenTools.pressKey(screen, keyCode, 0);
+			return "Pressed " + keyShown + " (code " + keyCode + ") on " + screen.getClass().getSimpleName()
 					+ (handled ? "." : " (screen did not consume it).");
 		}, TIMEOUT_SECONDS);
 	}
 
-	private static String shownLabel(int code) {
-		if (code >= 32 && code <= 126) {
-			return "'" + (char) code + "' (code " + code + ")";
-		}
-		return "code " + code;
-	}
-
-	/** Map a single character or key name to a GLFW key code, or -1 if unknown. */
+	/** Map a single character or key name to an {@link InputConstants} key code, or -1 if unknown. */
 	private static int resolveKey(String key) {
 		if (key.length() == 1) {
 			char c = Character.toUpperCase(key.charAt(0));
-			// GLFW letter/digit codes equal their ASCII uppercase values.
-			if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == ' ') {
-				return c;
+			// Scancodes run A..Z contiguously, then 1..9, then 0.
+			if (c >= 'A' && c <= 'Z') {
+				return InputConstants.KEY_A + (c - 'A');
+			}
+			if (c >= '1' && c <= '9') {
+				return InputConstants.KEY_1 + (c - '1');
+			}
+			if (c == '0') {
+				return InputConstants.KEY_0;
+			}
+			if (c == ' ') {
+				return InputConstants.KEY_SPACE;
 			}
 		}
 		return switch (key.toLowerCase()) {
-			case "escape", "esc" -> 256;
-			case "enter", "return" -> 257;
-			case "tab" -> 258;
-			case "backspace" -> 259;
-			case "space", "spacebar" -> 32;
-			case "right" -> 262;
-			case "left" -> 263;
-			case "down" -> 264;
-			case "up" -> 265;
+			case "escape", "esc" -> InputConstants.KEY_ESCAPE;
+			case "enter", "return" -> InputConstants.KEY_RETURN;
+			case "tab" -> InputConstants.KEY_TAB;
+			case "backspace" -> InputConstants.KEY_BACKSPACE;
+			case "space", "spacebar" -> InputConstants.KEY_SPACE;
+			case "right" -> InputConstants.KEY_RIGHT;
+			case "left" -> InputConstants.KEY_LEFT;
+			case "down" -> InputConstants.KEY_DOWN;
+			case "up" -> InputConstants.KEY_UP;
 			default -> -1;
 		};
 	}

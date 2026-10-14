@@ -3,6 +3,7 @@ package com.example.agentbutton.action;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.components.events.ContainerEventHandler;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -156,7 +157,7 @@ public final class ScreenTools {
 	public static boolean click(AbstractWidget w) {
 		double cx = w.getX() + w.getWidth() / 2.0;
 		double cy = w.getY() + w.getHeight() / 2.0;
-		MouseButtonEvent click = new MouseButtonEvent(cx, cy, new MouseButtonInfo(0, 0)); // button 0 = left, no modifiers
+		MouseButtonEvent click = new MouseButtonEvent(cx, cy, new MouseButtonInfo(InputConstants.MOUSE_BUTTON_LEFT, 0)); // no modifiers
 		boolean handled = w.mouseClicked(click, false);
 		w.mouseReleased(click);
 		return handled;
@@ -181,7 +182,7 @@ public final class ScreenTools {
 		top = list.getRowTop(row);
 		double cx = list.getRowLeft() + list.getRowWidth() / 2.0;
 		double cy = top + (list.getRowBottom(row) - top) / 2.0;
-		MouseButtonEvent click = new MouseButtonEvent(cx, cy, new MouseButtonInfo(0, 0));
+		MouseButtonEvent click = new MouseButtonEvent(cx, cy, new MouseButtonInfo(InputConstants.MOUSE_BUTTON_LEFT, 0));
 		boolean handled = screen.mouseClicked(click, false);
 		screen.mouseReleased(click);
 		return handled;
@@ -192,13 +193,46 @@ public final class ScreenTools {
 	 * {@link KeyEvent} records; routing them through {@code Screen.keyPressed} reproduces
 	 * a real keystroke (used e.g. to set a key while a Key Binds row is armed).
 	 *
-	 * @param glfwCode a {@code GLFW_KEY_*} code
+	 * @param keyCode an {@code InputConstants.KEY_*} code (26.x uses SDL-style scancodes, not GLFW codes)
 	 * @return true if the screen handled the press
 	 */
-	public static boolean pressKey(Screen screen, int glfwCode, int modifiers) {
-		KeyEvent input = new KeyEvent(glfwCode, 0, modifiers);
+	public static boolean pressKey(Screen screen, int keyCode, int modifiers) {
+		KeyEvent input = new KeyEvent(keyCode, sdlKeycodeOf(keyCode), modifiers);
 		boolean handled = screen.keyPressed(input);
 		screen.keyReleased(input);
 		return handled;
+	}
+
+	/**
+	 * The layout keycode for a scancode, which {@link KeyEvent#shortcutKey()} returns and
+	 * screens switch on (e.g. arrow-key focus navigation). Follows SDL's rule: printable
+	 * keys map to their character, everything else is {@code scancode | 1 << 30}.
+	 */
+	private static int sdlKeycodeOf(int scancode) {
+		if (scancode >= InputConstants.KEY_A && scancode <= InputConstants.KEY_Z) {
+			return 'a' + (scancode - InputConstants.KEY_A);
+		}
+		if (scancode >= InputConstants.KEY_1 && scancode <= InputConstants.KEY_9) {
+			return '1' + (scancode - InputConstants.KEY_1);
+		}
+		if (scancode == InputConstants.KEY_0) {
+			return '0';
+		}
+		if (scancode == InputConstants.KEY_RETURN) {
+			return '\r';
+		}
+		if (scancode == InputConstants.KEY_ESCAPE) {
+			return 27;
+		}
+		if (scancode == InputConstants.KEY_BACKSPACE) {
+			return '\b';
+		}
+		if (scancode == InputConstants.KEY_TAB) {
+			return '\t';
+		}
+		if (scancode == InputConstants.KEY_SPACE) {
+			return ' ';
+		}
+		return scancode | 1 << 30;
 	}
 }
