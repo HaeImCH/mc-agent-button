@@ -6,10 +6,9 @@ import com.example.agentbutton.ui.AgentButtonScreen;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
-import org.lwjgl.glfw.GLFW;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.minecraft.client.KeyMapping;
+import com.mojang.blaze3d.platform.InputConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,25 +19,25 @@ public class AgentButtonClient implements ClientModInitializer {
 	/** Default MCP port; override with -Dagentbutton.mcp.port=NNN or AGENTBUTTON_MCP_PORT. */
 	private static final int DEFAULT_MCP_PORT = 8642;
 
-	private static KeyBinding openScreenKey;
+	private static KeyMapping openScreenKey;
 	private McpServer mcpServer;
 
 	@Override
 	public void onInitializeClient() {
 		// 1) Register a keybinding (default: G) to open the agent menu — a handy test
 		//    surface for the get_screen / click_button MCP tools. Rebindable in
-		//    Options > Controls. 1.21.11 uses a KeyBinding.Category object, not a String.
-		openScreenKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+		//    Options > Controls. KeyMapping takes a Category object, not a String.
+		openScreenKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 				"key.agentbutton.open_screen",
-				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_G,
-				KeyBinding.Category.MULTIPLAYER
+				InputConstants.Type.KEYBOARD,
+				InputConstants.KEY_G,
+				KeyMapping.Category.MULTIPLAYER
 		));
 
 		// 2) Poll the keybinding each client tick; drain with a while-loop.
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
-			while (openScreenKey.wasPressed()) {
-				client.setScreen(new AgentButtonScreen(client.currentScreen));
+			while (openScreenKey.consumeClick()) {
+				client.gui.setScreen(new AgentButtonScreen(client.gui.screen()));
 			}
 		});
 

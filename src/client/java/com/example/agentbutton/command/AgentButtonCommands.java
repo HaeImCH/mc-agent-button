@@ -3,10 +3,10 @@ package com.example.agentbutton.command;
 import com.example.agentbutton.action.ServerActions;
 import com.example.agentbutton.ui.AgentButtonScreen;
 import com.mojang.brigadier.arguments.StringArgumentType;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 import java.util.List;
 
@@ -23,35 +23,35 @@ public final class AgentButtonCommands {
 
 	public static void register() {
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-			dispatcher.register(ClientCommandManager.literal("agentbutton")
+			dispatcher.register(ClientCommands.literal("agentbutton")
 					.executes(ctx -> {
-						MinecraftClient client = MinecraftClient.getInstance();
-						client.execute(() -> client.setScreen(new AgentButtonScreen(client.currentScreen)));
+						Minecraft client = Minecraft.getInstance();
+						client.execute(() -> client.gui.setScreen(new AgentButtonScreen(client.gui.screen())));
 						return 1;
 					}));
 
-			dispatcher.register(ClientCommandManager.literal("abconnect")
-					.then(ClientCommandManager.argument("address", StringArgumentType.greedyString())
+			dispatcher.register(ClientCommands.literal("abconnect")
+					.then(ClientCommands.argument("address", StringArgumentType.greedyString())
 							.executes(ctx -> {
 								String address = StringArgumentType.getString(ctx, "address");
-								ctx.getSource().sendFeedback(Text.literal("Connecting to " + address));
+								ctx.getSource().sendFeedback(Component.literal("Connecting to " + address));
 								ServerActions.connect(address);
 								return 1;
 							})));
 
-			dispatcher.register(ClientCommandManager.literal("abdisconnect")
+			dispatcher.register(ClientCommands.literal("abdisconnect")
 					.executes(ctx -> {
-						ctx.getSource().sendFeedback(Text.literal("Disconnecting"));
+						ctx.getSource().sendFeedback(Component.literal("Disconnecting"));
 						ServerActions.disconnect();
 						return 1;
 					}));
 
-			dispatcher.register(ClientCommandManager.literal("abservers")
+			dispatcher.register(ClientCommands.literal("abservers")
 					.executes(ctx -> {
 						List<ServerActions.SavedServer> servers = ServerActions.listSavedServers();
-						ctx.getSource().sendFeedback(Text.literal("Saved servers (" + servers.size() + "):"));
+						ctx.getSource().sendFeedback(Component.literal("Saved servers (" + servers.size() + "):"));
 						for (ServerActions.SavedServer s : servers) {
-							ctx.getSource().sendFeedback(Text.literal(" - " + s.name() + " (" + s.address() + ")"));
+							ctx.getSource().sendFeedback(Component.literal(" - " + s.name() + " (" + s.address() + ")"));
 						}
 						return 1;
 					}));

@@ -16,3 +16,4 @@ run/
 .project
 bin/
 eclipse/
+.DS_Store

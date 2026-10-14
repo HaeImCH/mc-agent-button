@@ -4,9 +4,9 @@ import com.example.agentbutton.action.ScreenTools;
 import com.example.agentbutton.action.ServerActions;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.network.ServerInfo;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.multiplayer.ServerData;
 
 import java.util.List;
 import java.util.function.Consumer;
@@ -44,7 +44,7 @@ public final class McpTools {
 				schema(p -> {})));
 
 		tools.add(tool("click_button",
-				"Click a button or list row on the current screen (rows are scrolled into view and selected), identified by 'index' (from get_screen) or by 'label' (visible text, case-insensitive, substring allowed).",
+				"MouseButtonEvent a button or list row on the current screen (rows are scrolled into view and selected), identified by 'index' (from get_screen) or by 'label' (visible text, case-insensitive, substring allowed).",
 				schema(p -> {
 					p.add("index", integerProp("Widget index from get_screen"));
 					p.add("label", stringProp("Visible button text to match"));
@@ -134,7 +134,7 @@ public final class McpTools {
 
 	private String getScreen() {
 		return ClientThread.get(() -> {
-			Screen screen = MinecraftClient.getInstance().currentScreen;
+			Screen screen = Minecraft.getInstance().gui.screen();
 			if (screen == null) {
 				return "No screen is open (the player is in-game). There are no GUI buttons to click right now; use get_status.";
 			}
@@ -164,7 +164,7 @@ public final class McpTools {
 
 	private String clickButton(JsonObject args) {
 		return ClientThread.get(() -> {
-			Screen screen = MinecraftClient.getInstance().currentScreen;
+			Screen screen = Minecraft.getInstance().gui.screen();
 			if (screen == null) {
 				return "Cannot click: no screen is open.";
 			}
@@ -232,7 +232,7 @@ public final class McpTools {
 
 		final int glfwCode = code;
 		return ClientThread.get(() -> {
-			Screen screen = MinecraftClient.getInstance().currentScreen;
+			Screen screen = Minecraft.getInstance().gui.screen();
 			if (screen == null) {
 				return "Cannot press a key: no screen is open.";
 			}
@@ -274,12 +274,12 @@ public final class McpTools {
 
 	private String getStatus() {
 		return ClientThread.get(() -> {
-			MinecraftClient mc = MinecraftClient.getInstance();
-			boolean connected = mc.world != null;
-			ServerInfo entry = mc.getCurrentServerEntry();
-			String server = entry != null ? entry.address : (connected ? "(integrated/singleplayer)" : "none");
-			String player = mc.getSession() != null ? mc.getSession().getUsername() : "?";
-			String screen = mc.currentScreen != null ? mc.currentScreen.getClass().getSimpleName() : "none (in-game)";
+			Minecraft mc = Minecraft.getInstance();
+			boolean connected = mc.level != null;
+			ServerData entry = mc.getCurrentServer();
+			String server = entry != null ? entry.ip : (connected ? "(integrated/singleplayer)" : "none");
+			String player = mc.getUser() != null ? mc.getUser().getName() : "?";
+			String screen = mc.gui.screen() != null ? mc.gui.screen().getClass().getSimpleName() : "none (in-game)";
 			return "connected=" + connected
 					+ "\nserver=" + server
 					+ "\nplayer=" + player

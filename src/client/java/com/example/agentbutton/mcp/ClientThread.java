@@ -1,6 +1,6 @@
 package com.example.agentbutton.mcp;
 
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -13,15 +13,15 @@ import java.util.function.Supplier;
  *
  * <p>Almost all client state (the open {@code Screen}, widgets, the world) may only be
  * touched from the client thread. MCP tool handlers run on HTTP worker threads, so they
- * schedule work via {@link MinecraftClient#execute(Runnable)} and block for the result.
+ * schedule work via {@link Minecraft#execute(Runnable)} and block for the result.
  */
 public final class ClientThread {
 	private ClientThread() {}
 
 	/** Run {@code supplier} on the client thread and return its result, blocking up to {@code timeoutSeconds}. */
 	public static <T> T get(Supplier<T> supplier, long timeoutSeconds) {
-		MinecraftClient client = MinecraftClient.getInstance();
-		if (client.isOnThread()) {
+		Minecraft client = Minecraft.getInstance();
+		if (client.isSameThread()) {
 			return supplier.get();
 		}
 

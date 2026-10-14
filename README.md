@@ -19,7 +19,7 @@ Minecraft client**, so an external AI agent can drive the client over MCP:
                             McpTools ──ClientThread.get()──▶ render thread
                               │                                │
                               ├─ ServerActions  (connect / disconnect / list servers.dat)
-                              └─ ScreenTools    (describe + click ClickableWidgets)
+                              └─ ScreenTools    (describe + click AbstractWidgets and list rows)
 ```
 
 - Transport: MCP **Streamable HTTP**, single endpoint `POST /mcp`, one JSON response per
@@ -73,12 +73,14 @@ curl -s http://127.0.0.1:8642/mcp \
 
 | Component | Version |
 |---|---|
-| Minecraft | 1.21.11 |
-| Yarn mappings | 1.21.11+build.6 |
-| Fabric Loader | 0.19.3 |
-| Fabric API | 0.141.4+1.21.11 |
-| Fabric Loom | 1.17.11 |
-| JDK | Temurin 25 (bytecode targets Java 21) |
+| Minecraft | 26.3 |
+| Mappings | none — 26.x is unobfuscated, code uses Mojang's names |
+| Fabric Loader | 0.19.5 |
+| Fabric API | 0.163.0+26.3 |
+| Fabric Loom | 1.18.4 |
+| JDK | Temurin 25 |
+
+This is the `26.3` branch. The 1.21.11 (Yarn) version lives on `main`.
 
 ## Build & run
 
@@ -90,7 +92,7 @@ JDK 25 is wired in via `org.gradle.java.home` in `gradle.properties`.
 ```
 
 Drop `build/libs/agentbutton-1.0.0.jar` into the `mods/` folder of a Fabric Loader
-1.21.11 install (with Fabric API) to use it in a normal client.
+26.3 install (with Fabric API) to use it in a normal client.
 
 ## Manual controls (handy for testing the screen tools)
 
