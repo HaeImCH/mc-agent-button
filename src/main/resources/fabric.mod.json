@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "agentbutton",
+	"version": "${version}",
+
+	"name": "Agent Button",
+	"description": "Embeds an MCP server in the Minecraft client so an external agent can read and click on-screen buttons and manage multiplayer servers (list, join, disconnect).",
+	"authors": ["You"],
+	"contact": {},
+
+	"license": "MIT",
+	"icon": "assets/agentbutton/icon.png",
+
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.example.agentbutton.AgentButtonClient"
+		]
+	},
+
+	"depends": {
+		"fabricloader": ">=0.16.10",
+		"minecraft": "~1.21",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

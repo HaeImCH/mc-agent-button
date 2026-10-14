@@ -1,0 +1,15 @@
+{
+	"key.agentbutton.open_screen": "Open Agent Button Menu",
+
+	"disconnect.agentbutton": "Disconnected (Agent Button)",
+
+	"screen.agentbutton.title": "Agent Button",
+	"button.agentbutton.connect": "Connect to Server",
+	"button.agentbutton.disconnect": "Disconnect",
+	"button.agentbutton.list": "Refresh Server List",
+	"button.agentbutton.done": "Done",
+
+	"label.agentbutton.saved_servers": "Saved Servers (%s)",
+	"label.agentbutton.no_servers": "No saved servers found",
+	"msg.agentbutton.list_header": "Saved servers: %s"
+}
