@@ -6,7 +6,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ClickableWidget;
 import net.minecraft.client.network.ServerInfo;
 
 import java.util.List;
@@ -41,11 +40,11 @@ public final class McpTools {
 				schema(p -> {})));
 
 		tools.add(tool("get_screen",
-				"Read the current on-screen GUI: the open screen and every clickable button/widget with its index, label, state and position. Returns nothing to click when the player is in-game with no menu open.",
+				"Read the current on-screen GUI: the open screen and every clickable button/widget — including rows of scrolling lists (world list, version pickers, ...) — with its index, label, state and position. Returns nothing to click when the player is in-game with no menu open.",
 				schema(p -> {})));
 
 		tools.add(tool("click_button",
-				"Click a button on the current screen, identified by 'index' (from get_screen) or by 'label' (visible text, case-insensitive, substring allowed).",
+				"Click a button or list row on the current screen (rows are scrolled into view and selected), identified by 'index' (from get_screen) or by 'label' (visible text, case-insensitive, substring allowed).",
 				schema(p -> {
 					p.add("index", integerProp("Widget index from get_screen"));
 					p.add("label", stringProp("Visible button text to match"));
@@ -149,8 +148,9 @@ public final class McpTools {
 			for (ScreenTools.Widget w : widgets) {
 				sb.append("  [").append(w.index()).append("] \"").append(w.label()).append("\" ")
 						.append('(').append(w.type()).append(')')
+						.append(w.selected() ? " [selected]" : "")
 						.append(w.active() ? "" : " [disabled]")
-						.append(w.visible() ? "" : " [hidden]")
+						.append(w.visible() ? "" : (w.type().startsWith("row of ") ? " [scrolled out of view]" : " [hidden]"))
 						.append(" @ ").append(w.x()).append(',').append(w.y())
 						.append(' ').append(w.width()).append('x').append(w.height())
 						.append('\n');
@@ -168,9 +168,9 @@ public final class McpTools {
 			if (screen == null) {
 				return "Cannot click: no screen is open.";
 			}
-			List<ClickableWidget> widgets = ScreenTools.collect(screen);
+			List<ScreenTools.Target> widgets = ScreenTools.collect(screen);
 
-			ClickableWidget target = null;
+			ScreenTools.Target target = null;
 			String matchedBy;
 			if (args.has("index") && !args.get("index").isJsonNull()) {
 				int idx = args.get("index").getAsInt();
@@ -181,7 +181,7 @@ public final class McpTools {
 				matchedBy = "index " + idx;
 			} else if (args.has("label") && !args.get("label").isJsonNull()) {
 				String label = args.get("label").getAsString();
-				for (ClickableWidget w : widgets) {
+				for (ScreenTools.Target w : widgets) {
 					if (ScreenTools.labelOf(w).equalsIgnoreCase(label)) {
 						target = w;
 						break;
@@ -189,7 +189,7 @@ public final class McpTools {
 				}
 				if (target == null) {
 					String lower = label.toLowerCase();
-					for (ClickableWidget w : widgets) {
+					for (ScreenTools.Target w : widgets) {
 						if (ScreenTools.labelOf(w).toLowerCase().contains(lower)) {
 							target = w;
 							break;
@@ -205,11 +205,11 @@ public final class McpTools {
 			}
 
 			String label = ScreenTools.labelOf(target);
-			if (!target.active || !target.visible) {
-				return "Button \"" + label + "\" is currently " + (target.visible ? "disabled" : "hidden") + "; not clicking.";
+			if (!ScreenTools.isClickable(target)) {
+				return "Button \"" + label + "\" is currently disabled or hidden; not clicking.";
 			}
-			ScreenTools.click(target);
-			return "Clicked \"" + label + "\" (matched by " + matchedBy + ").";
+			ScreenTools.click(screen, target);
+			return "Clicked " + (target.isRow() ? "list row " : "") + "\"" + label + "\" (matched by " + matchedBy + ").";
 		}, TIMEOUT_SECONDS);
 	}
 

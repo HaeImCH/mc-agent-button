@@ -4,7 +4,9 @@ import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.Element;
 import net.minecraft.client.gui.ParentElement;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.AlwaysSelectedEntryListWidget;
 import net.minecraft.client.gui.widget.ClickableWidget;
+import net.minecraft.client.gui.widget.EntryListWidget;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.input.MouseInput;
 
@@ -14,7 +16,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Reads and clicks the clickable widgets on the currently-open {@link Screen}.
+ * Reads and clicks the clickable targets on the currently-open {@link Screen}: ordinary
+ * {@link ClickableWidget}s plus the rows of scrolling lists ({@link EntryListWidget}),
+ * e.g. the world list, resource packs, or ViaFabricPlus's protocol picker.
  *
  * <p>All methods here assume they are called on the Minecraft client thread
  * (see {@code ClientThread}).
@@ -22,60 +26,123 @@ import java.util.Set;
 public final class ScreenTools {
 	private ScreenTools() {}
 
-	/** A flat description of one on-screen clickable widget. */
+	/** A flat description of one on-screen clickable target. */
 	public record Widget(int index, String type, String label,
 	                     int x, int y, int width, int height,
-	                     boolean active, boolean visible, boolean hovered) {}
+	                     boolean active, boolean visible, boolean hovered, boolean selected) {}
 
 	/**
-	 * Collect the clickable widgets of a screen, in render order, descending into list
+	 * A clickable thing on the screen: either a {@link ClickableWidget}, or a row of an
+	 * {@link EntryListWidget} together with the list that owns it. Rows are typed as
+	 * {@link Element} because {@code EntryListWidget.Entry} is protected.
+	 */
+	public record Target(ClickableWidget widget, EntryListWidget<?> list, Element entry) {
+		static Target of(ClickableWidget w) {
+			return new Target(w, null, null);
+		}
+
+		static Target row(EntryListWidget<?> list, Element entry) {
+			return new Target(null, list, entry);
+		}
+
+		public boolean isRow() {
+			return entry != null;
+		}
+	}
+
+	/**
+	 * Collect the clickable targets of a screen, in render order, descending into list
 	 * and container widgets ({@link ParentElement}) so nested controls — e.g. the rows of
 	 * the Controls / Key Binds list, or entries of the server list — are reachable too.
+	 *
+	 * <p>Rows that hold their own widgets (e.g. Key Binds rows) are not reported themselves;
+	 * their buttons are. Plain rows (world list, protocol picker, ...) are reported as
+	 * clickable targets.
 	 */
-	public static List<ClickableWidget> collect(Screen screen) {
-		List<ClickableWidget> out = new ArrayList<>();
+	public static List<Target> collect(Screen screen) {
+		List<Target> out = new ArrayList<>();
 		if (screen == null) {
 			return out;
 		}
 		Set<Element> seen = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
-		collectInto(screen.children(), out, seen);
+		collectInto(screen.children(), null, out, seen);
 		return out;
 	}
 
-	private static void collectInto(List<? extends Element> elements, List<ClickableWidget> out, Set<Element> seen) {
+	private static void collectInto(List<? extends Element> elements, EntryListWidget<?> owner,
+	                                List<Target> out, Set<Element> seen) {
 		for (Element e : elements) {
 			if (e == null || !seen.add(e)) {
 				continue;
 			}
-			if (e instanceof ClickableWidget w) {
-				out.add(w);
+			if (e instanceof ClickableWidget w && !(e instanceof EntryListWidget<?>)) {
+				out.add(Target.of(w));
+			}
+			// Every direct child of an EntryListWidget is one of its rows.
+			if (owner != null && !(e instanceof ParentElement)) {
+				out.add(Target.row(owner, e));
 			}
 			if (e instanceof ParentElement parent) {
-				collectInto(parent.children(), out, seen);
+				collectInto(parent.children(), e instanceof EntryListWidget<?> list ? list : null, out, seen);
 			}
 		}
 	}
 
-	/** Describe each clickable widget (index, label, geometry, state). */
+	/** Describe each clickable target (index, label, geometry, state). */
 	public static List<Widget> describe(Screen screen) {
-		List<ClickableWidget> widgets = collect(screen);
-		List<Widget> out = new ArrayList<>(widgets.size());
-		for (int i = 0; i < widgets.size(); i++) {
-			ClickableWidget w = widgets.get(i);
-			out.add(new Widget(
-					i,
-					w.getClass().getSimpleName(),
-					labelOf(w),
-					w.getX(), w.getY(), w.getWidth(), w.getHeight(),
-					w.active, w.visible, w.isHovered()
-			));
+		List<Target> targets = collect(screen);
+		List<Widget> out = new ArrayList<>(targets.size());
+		for (int i = 0; i < targets.size(); i++) {
+			Target t = targets.get(i);
+			if (t.isRow()) {
+				EntryListWidget<?> list = t.list();
+				int row = list.children().indexOf(t.entry());
+				int top = list.getRowTop(row);
+				int bottom = list.getRowBottom(row);
+				boolean inView = bottom > list.getY() && top < list.getBottom();
+				out.add(new Widget(
+						i,
+						"row of " + list.getClass().getSimpleName(),
+						labelOf(t),
+						list.getRowLeft(), top, list.getRowWidth(), bottom - top,
+						list.active, list.visible && inView, false,
+						list.getSelectedOrNull() == t.entry()
+				));
+			} else {
+				ClickableWidget w = t.widget();
+				out.add(new Widget(
+						i,
+						w.getClass().getSimpleName(),
+						labelOf(t),
+						w.getX(), w.getY(), w.getWidth(), w.getHeight(),
+						w.active, w.visible, w.isHovered(), false
+				));
+			}
 		}
 		return out;
 	}
 
-	/** The visible text of a widget, or "" if none. */
-	public static String labelOf(ClickableWidget w) {
+	/** The visible text of a target, or "" if none. List rows use their narration text. */
+	public static String labelOf(Target t) {
+		if (t.isRow()) {
+			if (t.entry() instanceof AlwaysSelectedEntryListWidget.Entry<?> e && e.getNarration() != null) {
+				return e.getNarration().getString();
+			}
+			return "";
+		}
+		ClickableWidget w = t.widget();
 		return w.getMessage() == null ? "" : w.getMessage().getString();
+	}
+
+	/** Whether the target can be clicked right now (rows scrolled out of view still can). */
+	public static boolean isClickable(Target t) {
+		ClickableWidget w = t.isRow() ? t.list() : t.widget();
+		return w.active && w.visible;
+	}
+
+	/** Click a target; see {@link #click(ClickableWidget)} and {@link #clickRow}. */
+	public static boolean click(Screen screen, Target t) {
+		return t.isRow() ? clickRow(screen, t.list(), t.entry()) : click(t.widget());
 	}
 
 	/**
@@ -92,6 +159,31 @@ public final class ScreenTools {
 		Click click = new Click(cx, cy, new MouseInput(0, 0)); // button 0 = left, no modifiers
 		boolean handled = w.mouseClicked(click, false);
 		w.mouseReleased(click);
+		return handled;
+	}
+
+	/**
+	 * Click a list row: scroll it into the middle of the list, then send the click through
+	 * the screen so the list gets focus and selects the row exactly as a real click would
+	 * (arrow keys then move within the list).
+	 *
+	 * @return true if the screen handled the click
+	 */
+	public static boolean clickRow(Screen screen, EntryListWidget<?> list, Element entry) {
+		int row = list.children().indexOf(entry);
+		if (row < 0) {
+			return false;
+		}
+		int top = list.getRowTop(row);
+		int height = list.getRowBottom(row) - top;
+		list.setScrollY(list.getScrollY() + (top - list.getY()) - (list.getHeight() - height) / 2.0);
+
+		top = list.getRowTop(row);
+		double cx = list.getRowLeft() + list.getRowWidth() / 2.0;
+		double cy = top + (list.getRowBottom(row) - top) / 2.0;
+		Click click = new Click(cx, cy, new MouseInput(0, 0));
+		boolean handled = screen.mouseClicked(click, false);
+		screen.mouseReleased(click);
 		return handled;
 	}
 

@@ -31,8 +31,9 @@ Minecraft client**, so an external AI agent can drive the client over MCP:
 
 | Tool | Arguments | Does |
 |---|---|---|
-| `get_screen` | – | List the open screen + its clickable widgets (index, label, state, position) |
-| `click_button` | `index` *or* `label` | Click a widget on the current screen |
+| `get_screen` | – | List the open screen + its clickable widgets and list rows (index, label, state, position) |
+| `click_button` | `index` *or* `label` | Click a widget, or scroll to + select a list row, on the current screen |
+| `press_key` | `key` *or* `code` | Send a key press to the current screen |
 | `list_servers` | – | List saved multiplayer servers (`servers.dat`) with indices |
 | `join_server` | `address` *or* `index` | Connect to a server |
 | `disconnect` | – | Disconnect from the current world/server |
