@@ -151,7 +151,8 @@ public final class McpTools {
 						.append('(').append(w.type()).append(')')
 						.append(w.selected() ? " [selected]" : "")
 						.append(w.active() ? "" : " [disabled]")
-						.append(w.visible() ? "" : (w.type().startsWith("row of ") ? " [scrolled out of view]" : " [hidden]"))
+						.append(w.visible() ? "" : " [hidden]")
+						.append(w.scrolledOut() ? " [scrolled out of view]" : "")
 						.append(" @ ").append(w.x()).append(',').append(w.y())
 						.append(' ').append(w.width()).append('x').append(w.height())
 						.append('\n');
@@ -163,55 +164,87 @@ public final class McpTools {
 		}, TIMEOUT_SECONDS);
 	}
 
-	private String clickButton(JsonObject args) {
-		return ClientThread.get(() -> {
-			Screen screen = Minecraft.getInstance().gui.screen();
-			if (screen == null) {
-				return "Cannot click: no screen is open.";
-			}
-			List<ScreenTools.Target> widgets = ScreenTools.collect(screen);
+	/** Outcome of resolving a click: either a final message, or a target to click on the next frame. */
+	private record PendingClick(String message, Screen screen, ScreenTools.Target target, String matchedBy) {
+		static PendingClick done(String message) {
+			return new PendingClick(message, null, null, null);
+		}
+	}
 
-			ScreenTools.Target target = null;
-			String matchedBy;
-			if (args.has("index") && !args.get("index").isJsonNull()) {
-				int idx = args.get("index").getAsInt();
-				if (idx < 0 || idx >= widgets.size()) {
-					return "No widget at index " + idx + " (screen has " + widgets.size() + " clickable widgets).";
+	private String clickButton(JsonObject args) {
+		PendingClick pending = ClientThread.get(() -> resolveClick(args), TIMEOUT_SECONDS);
+		if (pending.message() != null) {
+			return pending.message();
+		}
+		// The target is a widget inside a list row that was scrolled out of view. The row has
+		// now been scrolled into view, but its widgets only get their real positions when the
+		// row is next drawn, so click on a later frame. ClientThread tasks run at the start of
+		// a frame, so this second hop lands after the frame that drew the scrolled list.
+		return ClientThread.get(() -> {
+			if (Minecraft.getInstance().gui.screen() != pending.screen()) {
+				return "The screen changed before the click; nothing was clicked.";
+			}
+			ScreenTools.Target target = pending.target();
+			String label = ScreenTools.labelOf(target);
+			if (!ScreenTools.isRowInView(target.list(), target.entry())) {
+				return "Scrolled \"" + label + "\" towards view but it is still not visible; nothing was clicked. Try again.";
+			}
+			ScreenTools.click(pending.screen(), target);
+			return "Scrolled to and clicked \"" + label + "\" (matched by " + pending.matchedBy() + ").";
+		}, TIMEOUT_SECONDS);
+	}
+
+	private PendingClick resolveClick(JsonObject args) {
+		Screen screen = Minecraft.getInstance().gui.screen();
+		if (screen == null) {
+			return PendingClick.done("Cannot click: no screen is open.");
+		}
+		List<ScreenTools.Target> widgets = ScreenTools.collect(screen);
+
+		ScreenTools.Target target = null;
+		String matchedBy;
+		if (args.has("index") && !args.get("index").isJsonNull()) {
+			int idx = args.get("index").getAsInt();
+			if (idx < 0 || idx >= widgets.size()) {
+				return PendingClick.done("No widget at index " + idx + " (screen has " + widgets.size() + " clickable widgets).");
+			}
+			target = widgets.get(idx);
+			matchedBy = "index " + idx;
+		} else if (args.has("label") && !args.get("label").isJsonNull()) {
+			String label = args.get("label").getAsString();
+			for (ScreenTools.Target w : widgets) {
+				if (ScreenTools.labelOf(w).equalsIgnoreCase(label)) {
+					target = w;
+					break;
 				}
-				target = widgets.get(idx);
-				matchedBy = "index " + idx;
-			} else if (args.has("label") && !args.get("label").isJsonNull()) {
-				String label = args.get("label").getAsString();
+			}
+			if (target == null) {
+				String lower = label.toLowerCase();
 				for (ScreenTools.Target w : widgets) {
-					if (ScreenTools.labelOf(w).equalsIgnoreCase(label)) {
+					if (ScreenTools.labelOf(w).toLowerCase().contains(lower)) {
 						target = w;
 						break;
 					}
 				}
-				if (target == null) {
-					String lower = label.toLowerCase();
-					for (ScreenTools.Target w : widgets) {
-						if (ScreenTools.labelOf(w).toLowerCase().contains(lower)) {
-							target = w;
-							break;
-						}
-					}
-				}
-				if (target == null) {
-					return "No button matching label \"" + label + "\". Use get_screen to see available buttons.";
-				}
-				matchedBy = "label \"" + label + "\"";
-			} else {
-				return "Provide either 'index' or 'label'.";
 			}
+			if (target == null) {
+				return PendingClick.done("No button matching label \"" + label + "\". Use get_screen to see available buttons.");
+			}
+			matchedBy = "label \"" + label + "\"";
+		} else {
+			return PendingClick.done("Provide either 'index' or 'label'.");
+		}
 
-			String label = ScreenTools.labelOf(target);
-			if (!ScreenTools.isClickable(target)) {
-				return "Button \"" + label + "\" is currently disabled or hidden; not clicking.";
-			}
-			ScreenTools.click(screen, target);
-			return "Clicked " + (target.isRow() ? "list row " : "") + "\"" + label + "\" (matched by " + matchedBy + ").";
-		}, TIMEOUT_SECONDS);
+		String label = ScreenTools.labelOf(target);
+		if (!ScreenTools.isClickable(target)) {
+			return PendingClick.done("Button \"" + label + "\" is currently disabled or hidden; not clicking.");
+		}
+		if (target.isInRow() && !ScreenTools.isRowInView(target.list(), target.entry())) {
+			ScreenTools.scrollRowIntoView(target.list(), target.entry());
+			return new PendingClick(null, screen, target, matchedBy);
+		}
+		ScreenTools.click(screen, target);
+		return PendingClick.done("Clicked " + (target.isRow() ? "list row " : "") + "\"" + label + "\" (matched by " + matchedBy + ").");
 	}
 
 	private String pressKey(JsonObject args) {
